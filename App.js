@@ -1,146 +1,241 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  Modal,
   StyleSheet,
-  Alert,
+  Text,
+  View,
+  FlatList,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  SafeAreaView,
+  StatusBar,
+  Alert
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 
-const App = () => {
-  const [tickets, setTickets] = useState([]);
-  const [visible, setVisible] = useState(false);
+const initialTickets = [
+  {
+    id: '1',
+    title: 'Login Issue',
+    description: 'Users facing trouble logging in with special characters.',
+    status: 'Under Assistance',
+    rating: null
+  },
+  {
+    id: '2',
+    title: 'Homepage Redesign',
+    description: 'Revamp landing page for better UX and engagement.',
+    status: 'Created',
+    rating: null
+  },
+  {
+    id: '3',
+    title: 'Database Optimization',
+    description: 'Improve query performance and reduce load times.',
+    status: 'Completed',
+    rating: 4
+  }
+];
+
+const StatusBadge = ({ status }) => {
+  const getStatusStyle = () => {
+    switch (status) {
+      case 'Created':
+        return { backgroundColor: '#E0F2FE', color: '#0284C7' }; // Blue
+      case 'Under Assistance':
+        return { backgroundColor: '#FEF9C3', color: '#B45309' }; // Yellow
+      case 'Completed':
+        return { backgroundColor: '#D1FAE5', color: '#065F46' }; // Green
+      default:
+        return { backgroundColor: '#F3F4F6', color: '#374151' }; // Gray
+    }
+  };
+
+  const statusStyle = getStatusStyle();
+
+  return (
+    <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
+      <Text style={[styles.statusText, { color: statusStyle.color }]}>
+        {status}
+      </Text>
+    </View>
+  );
+};
+
+const RatingStars = ({ rating, onRate, editable = false }) => {
+  const stars = [1, 2, 3, 4, 5];
+
+  return (
+    <View style={styles.ratingContainer}>
+      {stars.map((star) => (
+        <TouchableOpacity
+          key={star}
+          onPress={() => editable && onRate(star)}
+          disabled={!editable}
+        >
+          <Text style={styles.star}>{rating >= star ? '★' : '☆'}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+const TicketItem = ({ ticket, onEdit, onDelete, onRate }) => (
+  <View style={styles.ticketItem}>
+    <View style={styles.ticketHeader}>
+      <Text style={styles.ticketTitle}>{ticket.title}</Text>
+      <View style={styles.ticketActions}>
+        <TouchableOpacity onPress={() => onEdit(ticket)} style={styles.iconButton}>
+          <Text style={styles.icon}>✎</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(ticket.id)} style={styles.iconButton}>
+          <Text style={styles.icon}>🗑</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+    <Text style={styles.ticketDescription}>{ticket.description}</Text>
+    <View style={styles.ticketFooter}>
+      <StatusBadge status={ticket.status} />
+      {ticket.status === 'Completed' && (
+        <RatingStars 
+          rating={ticket.rating} 
+          onRate={(rating) => onRate(ticket.id, rating)}
+          editable={true}
+        />
+      )}
+    </View>
+  </View>
+);
+
+export default function App() {
+  const [tickets, setTickets] = useState(initialTickets);
+  const [modalVisible, setModalVisible] = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
-  const [form, setForm] = useState({ title: '', description: '', status: 'Created' });
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    status: 'Created'
+  });
 
-  const handleSave = () => {
-    if (!form.title.trim() || !form.description.trim()) {
-      return Alert.alert('Missing Info', 'Please fill all fields');
+  const handleAddTicket = () => {
+    setEditingTicket(null);
+    setFormData({ title: '', description: '', status: 'Created' });
+    setModalVisible(true);
+  };
+
+  const handleEditTicket = (ticket) => {
+    setEditingTicket(ticket);
+    setFormData({
+      title: ticket.title,
+      description: ticket.description,
+      status: ticket.status
+    });
+    setModalVisible(true);
+  };
+
+  const handleSaveTicket = () => {
+    if (!formData.title.trim() || !formData.description.trim()) {
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
     }
 
     if (editingTicket) {
-      setTickets((prev) =>
-        prev.map((t) => (t.id === editingTicket.id ? { ...t, ...form } : t))
-      );
+      setTickets(tickets.map(ticket =>
+        ticket.id === editingTicket.id
+          ? { ...ticket, ...formData, rating: formData.status !== 'Completed' ? null : ticket.rating }
+          : ticket
+      ));
     } else {
-      setTickets((prev) => [
-        ...prev,
-        { id: Date.now().toString(), ...form, rating: null },
-      ]);
+      const newTicket = { id: Date.now().toString(), ...formData, rating: null };
+      setTickets([...tickets, newTicket]);
     }
 
-    setForm({ title: '', description: '', status: 'Created' });
-    setEditingTicket(null);
-    setVisible(false);
+    setModalVisible(false);
+    setFormData({ title: '', description: '', status: 'Created' });
   };
 
-  const handleDelete = (id) =>
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel' },
-      { text: 'Yes', onPress: () => setTickets((t) => t.filter((x) => x.id !== id)) },
-    ]);
-
-  const handleRate = (id, rating) =>
-    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, rating } : t)));
-
-  const getStatusColor = (s) =>
-    s === 'Created' ? '#3B82F6' : s === 'Under Assistance' ? '#F59E0B' : '#10B981';
-
-  const openModal = (ticket = null) => {
-    setEditingTicket(ticket);
-    setForm(ticket ? { title: ticket.title, description: ticket.description, status: ticket.status } : { title: '', description: '', status: 'Created' });
-    setVisible(true);
+  const handleDeleteTicket = (id) => {
+    Alert.alert(
+      'Delete Ticket',
+      'Are you sure you want to delete this ticket?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => setTickets(tickets.filter(t => t.id !== id)) }
+      ]
+    );
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{item.title}</Text>
-        <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Text style={styles.delete}>×</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.desc}>{item.description}</Text>
-      <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) }]}>
-        <Text style={styles.badgeText}>{item.status}</Text>
-      </View>
-
-      {item.status === 'Completed' && (
-        <View style={styles.ratingRow}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <TouchableOpacity key={star} onPress={() => handleRate(item.id, star)}>
-              <Text style={styles.star}>{star <= (item.rating || 0) ? '★' : '☆'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.editBtn} onPress={() => openModal(item)}>
-        <Text style={styles.editText}>Edit</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const handleRateTicket = (id, rating) => {
+    setTickets(tickets.map(ticket => ticket.id === id ? { ...ticket, rating } : ticket));
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>🎟️ Ticket Tracker</Text>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>🎫 My Ticket Tracker</Text>
+      </View>
+
       <FlatList
         data={tickets}
-        keyExtractor={(i) => i.id}
-        renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.empty}>No tickets yet</Text>}
-        contentContainerStyle={{ padding: 16 }}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TicketItem
+            ticket={item}
+            onEdit={handleEditTicket}
+            onDelete={handleDeleteTicket}
+            onRate={handleRateTicket}
+          />
+        )}
+        contentContainerStyle={styles.listContent}
       />
 
-      <TouchableOpacity style={styles.fab} onPress={() => openModal()}>
-        <Text style={styles.fabText}>+</Text>
+      <TouchableOpacity style={styles.addButton} onPress={handleAddTicket}>
+        <Text style={styles.addButtonText}>➕ Add Ticket</Text>
       </TouchableOpacity>
 
-      {/* MODAL */}
-      <Modal visible={visible} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
+      <Modal animationType="slide" transparent={true} visible={modalVisible}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
-              {editingTicket ? 'Edit Ticket' : 'New Ticket'}
+              {editingTicket ? 'Edit Ticket Details' : 'Create New Ticket'}
             </Text>
 
             <TextInput
               style={styles.input}
-              placeholder="Title"
-              value={form.title}
-              onChangeText={(t) => setForm({ ...form, title: t })}
+              placeholder="Ticket Title"
+              value={formData.title}
+              onChangeText={(text) => setFormData({ ...formData, title: text })}
             />
             <TextInput
-              style={[styles.input, { height: 80 }]}
-              placeholder="Description"
-              value={form.description}
-              onChangeText={(t) => setForm({ ...form, description: t })}
+              style={[styles.input, styles.textArea]}
+              placeholder="Ticket Description"
+              value={formData.description}
+              onChangeText={(text) => setFormData({ ...formData, description: text })}
               multiline
+              numberOfLines={4}
             />
 
-            <Picker
-              selectedValue={form.status}
-              onValueChange={(v) => setForm({ ...form, status: v })}>
-              <Picker.Item label="Created" value="Created" />
-              <Picker.Item label="Under Assistance" value="Under Assistance" />
-              <Picker.Item label="Completed" value="Completed" />
-            </Picker>
+            <Text style={styles.label}>Status:</Text>
+            <View style={styles.statusPicker}>
+              {['Created', 'Under Assistance', 'Completed'].map(status => (
+                <TouchableOpacity
+                  key={status}
+                  style={[styles.statusOption, formData.status === status && styles.statusOptionActive]}
+                  onPress={() => setFormData({ ...formData, status })}
+                >
+                  <Text style={[styles.statusOptionText, formData.status === status && styles.statusOptionTextActive]}>
+                    {status}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            <View style={styles.btnRow}>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: '#E5E7EB' }]}
-                onPress={() => setVisible(false)}>
-                <Text style={styles.cancel}>Cancel</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: '#3B82F6' }]}
-                onPress={handleSave}>
-                <Text style={styles.save}>Save</Text>
+              <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveTicket}>
+                <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -148,88 +243,52 @@ const App = () => {
       </Modal>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: {
-    backgroundColor: '#1F2937',
-    color: '#fff',
-    textAlign: 'center',
-    fontSize: 22,
-    fontWeight: 'bold',
-    paddingVertical: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
+  header: { backgroundColor: '#111827', padding: 20, alignItems: 'center' },
+  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#F3F4F6' },
+  listContent: { padding: 16 },
+  ticketItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
     marginBottom: 12,
     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  title: { fontSize: 16, fontWeight: '700', color: '#111827', flex: 1 },
-  delete: { color: '#EF4444', fontSize: 22, marginLeft: 8 },
-  desc: { color: '#6B7280', marginVertical: 8 },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  ratingRow: { flexDirection: 'row', marginBottom: 10 },
-  star: { fontSize: 24, color: '#F59E0B', marginRight: 4 },
-  editBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 6,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  editText: { color: '#fff', fontWeight: '600' },
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#2563EB',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  fabText: { color: '#fff', fontSize: 28, fontWeight: '300' },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    backgroundColor: '#F9FAFB',
-  },
-  btnRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  btn: { flex: 1, marginHorizontal: 5, paddingVertical: 10, borderRadius: 8 },
-  cancel: { textAlign: 'center', fontWeight: '600', color: '#374151' },
-  save: { textAlign: 'center', fontWeight: '600', color: '#fff' },
-  empty: { textAlign: 'center', color: '#9CA3AF', marginTop: 40 },
+  ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  ticketTitle: { fontSize: 20, fontWeight: '700', color: '#111827', flex: 1 },
+  ticketActions: { flexDirection: 'row' },
+  iconButton: { marginLeft: 12 },
+  icon: { fontSize: 18, color: '#6B7280' },
+  ticketDescription: { fontSize: 15, color: '#4B5563', marginBottom: 12 },
+  ticketFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statusBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  statusText: { fontSize: 12, fontWeight: '600' },
+  ratingContainer: { flexDirection: 'row' },
+  star: { fontSize: 20, color: '#FBBF24', marginHorizontal: 2 },
+  addButton: { backgroundColor: '#4F46E5', margin: 16, padding: 16, borderRadius: 16, alignItems: 'center' },
+  addButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '90%', maxWidth: 400 },
+  modalTitle: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 20 },
+  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 16 },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  label: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  statusPicker: { marginBottom: 20 },
+  statusOption: { padding: 12, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, marginBottom: 8 },
+  statusOptionActive: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
+  statusOptionText: { fontSize: 14, color: '#111827', textAlign: 'center' },
+  statusOptionTextActive: { color: '#FFFFFF', fontWeight: '700' },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
+  modalButton: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
+  cancelButton: { backgroundColor: '#F3F4F6', marginRight: 8 },
+  cancelButtonText: { color: '#111827', fontWeight: '600' },
+  saveButton: { backgroundColor: '#4F46E5', marginLeft: 8 },
+  saveButtonText: { color: '#FFFFFF', fontWeight: '700' },
 });
-
-export default App;
